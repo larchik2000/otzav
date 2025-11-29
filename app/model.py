@@ -1,23 +1,29 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
-MODEL_NAME = "seara/rubert-tiny2-russian-sentiment"
+# Используем RuBERT от DeepPavlov
+MODEL_NAME = "DeepPavlov/rubert-base-cased"
 
-# Загружаем модель ОДИН раз при старте сервера
+# Загружаем токенайзер и модель
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
-model = AutoModelForSequenceClassification.from_pretrained(MODEL_NAME)
+model = AutoModelForSequenceClassification.from_pretrained(
+    MODEL_NAME,
+    num_labels=3  # классы: 0, 1, 2
+)
+
 model.eval()
 
-# Определим устройство (CPU/GPU)
+# Определяем устройство
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 model.to(device)
 
+# Маппинг предсказаний
 labels_map = {0: "0", 1: "1", 2: "2"}
 
 
-def predict_batch(texts, batch_size=32):
+def predict_batch(texts, batch_size=16):
     """
-    Быстрое предсказание тональности батчами.
+    Предсказание батчами для ускорения.
     """
     results = []
 
@@ -32,13 +38,12 @@ def predict_batch(texts, batch_size=32):
             return_tensors="pt"
         )
 
-        # переносим на GPU/CPU
         encoded = {k: v.to(device) for k, v in encoded.items()}
 
         with torch.no_grad():
             logits = model(**encoded).logits
 
-        preds = torch.argmax(logits, dim=1).cpu().numpy()
+        preds = torch.argmax(logits, dim=1).cpu().tolist()
 
         results.extend([labels_map[p] for p in preds])
 
