@@ -28,6 +28,14 @@
         </button>
     </div>
 
+    <!-- PROGRESS BAR -->
+    <div id="progressBox" class="mt-6 hidden">
+        <div class="w-full bg-gray-300 rounded-full h-4">
+            <div id="progressBar" class="bg-blue-600 h-4 rounded-full" style="width: 0%"></div>
+        </div>
+        <p id="progressText" class="text-center mt-2 text-gray-700 text-sm"></p>
+    </div>
+
     <div id="result" class="mt-8 text-gray-700"></div>
 
     <div class="mt-6">
@@ -39,8 +47,7 @@
 </div>
 
 <script>
-let lastResult = null;
-let textColumn = "text";
+let resultJson = null;  // ← ВАЖНО: одно имя!
 
 async function sendFile() {
     const file = document.getElementById("fileInput").files[0];
@@ -49,86 +56,117 @@ async function sendFile() {
         return;
     }
 
+    document.getElementById("progressBox").classList.remove("hidden");
+    document.getElementById("progressBar").style.width = "0%";
+    document.getElementById("progressText").innerText = "Начинаем обработку...";
+
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await fetch("/predict-file", {
+    const response = await fetch("/predict-stream", {
         method: "POST",
         body: formData
     });
 
-    const data = await res.json();
-    console.log("Ответ сервера:", data);
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
 
-    if (data.error) {
-        document.getElementById("result").innerHTML =
-            `<p class="text-red-600 font-semibold">Ошибка: ${data.error}</p>`;
+    while (true) {
+        const {value, done} = await reader.read();
+        if (done) break;
+
+        const chunk = decoder.decode(value, {stream: true});
+
+        chunk.split("\n\n").forEach(block => {
+            if (!block.startsWith("data:")) return;
+
+            const data = JSON.parse(block.replace("data: ", ""));
+
+            // ошибка
+            if (data.error) {
+                document.getElementById("result").innerText = data.error;
+                return;
+            }
+
+            // прогресс
+            if (data.progress !== undefined) {
+                document.getElementById("progressBar").style.width = data.progress + "%";
+                document.getElementById("progressText").innerText =
+                    `Обработано ${data.current} из ${data.total}`;
+            }
+
+            // финал
+            if (data.done) {
+                resultJson = data.result;   // ← важно!
+            }
+        });
+    }
+
+    // проверка результата
+    if (!resultJson) {
+        document.getElementById("result").innerText = "Ошибка обработки файла";
         return;
     }
 
-    lastResult = data.result;
-    textColumn = data.text_col || "text";
-
-    const preview = lastResult.slice(0, 10);
-
+    // превью
+    // превью 10 строк
+    const preview = resultJson.slice(0, 10);
     let html = `
         <h2 class="text-xl font-semibold mb-4">Первые 10 результатов:</h2>
         <table class="w-full border">
             <thead>
                 <tr class="bg-gray-200">
+                    <th class="border px-2 py-1">ID</th>
                     <th class="border px-2 py-1">Текст</th>
-                    <th class="border px-2 py-1">Тональность</th>
+                    <th class="border px-2 py-1">Label</th>
                 </tr>
             </thead>
             <tbody>
     `;
 
     preview.forEach(row => {
-        const safeText = String(row[textColumn] || "")
-            .replace(/</g, "&lt;")
-            .replace(/>/g, "&gt;");
-
         html += `
             <tr>
-                <td class="border px-2 py-1">${safeText}</td>
-                <td class="border px-2 py-1 font-semibold">${row.label}</td>
-            </tr>
-        `;
+                <td class="border px-2 py-1">${row.id}</td>
+                <td class="border px-2 py-1">${row.text}</td>
+                <td class="border px-2 py-1">${row.label}</td>
+            </tr>`;
     });
 
     html += `
             </tbody>
         </table>
-        <p class="mt-4 font-semibold">Всего строк обработано: ${lastResult.length}</p>
+        <p class="mt-4">Всего строк обработано: ${resultJson.length}</p>
     `;
 
-    document.getElementById("result").innerHTML = html;
 
+    document.getElementById("result").innerHTML = html;
     document.getElementById("downloadBtn").style.display = "block";
 }
 
+
 function downloadCSV() {
-    if (!lastResult) return;
+    if (!resultJson) return;
 
-    const header = Object.keys(lastResult[0]).join(",");
-    const rows = lastResult.map(obj =>
-        Object.values(obj)
-            .map(v => `"${String(v).replace(/"/g, '""')}"`)
-            .join(",")
-    );
-    const csvContent = [header, ...rows].join("\n");
+    const rows = ["ID,label"];
 
-    const blob = new Blob([csvContent], { type: "text/csv" });
+    resultJson.forEach(obj => {
+        rows.push(`${obj.id},${obj.label}`);
+    });
+
+    const csv = rows.join("\n");
+    const blob = new Blob([csv], {type: "text/csv"});
     const url = URL.createObjectURL(blob);
 
     const a = document.createElement("a");
     a.href = url;
-    a.download = "sentiment_result.csv";
+    a.download = "submission.csv";
     a.click();
 
     URL.revokeObjectURL(url);
 }
 </script>
+
 
 </body>
 </html>
