@@ -11,7 +11,6 @@ from app.model import predict_batch
 app = FastAPI()
 
 templates = Jinja2Templates(directory="app/templates")
-app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
 TEXT_COLUMNS = ["text", "comment", "review", "message", "content"]
 

@@ -1,8 +1,7 @@
 from transformers import AutoTokenizer, AutoModelForSequenceClassification
 import torch
 
-# Используем RuBERT от DeepPavlov
-MODEL_NAME = "DeepPavlov/rubert-base-cased"
+MODEL_NAME = "best_model"
 
 # Загружаем токенайзер и модель
 tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
