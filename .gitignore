@@ -1,0 +1,45 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+
+# Virtual environment
+.venv/
+env/
+venv/
+
+# Jupyter
+.ipynb_checkpoints/
+
+# macOS
+.DS_Store
+
+# VSCode
+.vscode/
+
+# Model weights
+model/*.pt
+model/*.bin
+model/*.safetensors
+*.h5
+*.ckpt
+
+# Data
+data/*.csv
+data/*.xlsx
+data/*.tsv
+
+# Tokenizer caches
+tokenizer/
+*.json
+
+# HuggingFace cache
+.cache/
+huggingface/
+~/.cache/huggingface/
+
+# Logs
+logs/
+*.log
