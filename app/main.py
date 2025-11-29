@@ -1,44 +1,49 @@
-from fastapi import FastAPI, UploadFile, File
+from fastapi import FastAPI, UploadFile, Request
+from fastapi.responses import HTMLResponse
+from fastapi.templating import Jinja2Templates
+from fastapi.staticfiles import StaticFiles
 import pandas as pd
 from app.model import predict_sentiment
-from app.preprocess import clean_text
-from sklearn.metrics import f1_score
-from io import StringIO
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi import Request
 
-app = FastAPI(title="Sentiment Classifier API")
+app = FastAPI()
 
 templates = Jinja2Templates(directory="app/templates")
 app.mount("/static", StaticFiles(directory="app/static"), name="static")
 
-@app.get("/")
-async def root(request: Request):
+TEXT_COLUMNS = ["text", "comment", "review", "message", "content"]
+
+
+@app.get("/", response_class=HTMLResponse)
+async def home(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
 @app.post("/predict-file")
-async def predict_file(file: UploadFile = File(...)):
-    content = await file.read()
-    df = pd.read_csv(StringIO(content.decode("utf-8")))
-    
-    df["clean_text"] = df["text"].apply(clean_text)
-    df["pred"] = df["clean_text"].apply(predict_sentiment)
+async def predict_file(file: UploadFile):
+    file.file.seek(0)  # важно сбросить поток
 
-    return df.to_dict(orient="records")
+    try:
+        df = pd.read_csv(file.file)
+    except Exception as e:
+        return {"result": [], "error": f"Ошибка чтения CSV: {e}"}
 
-@app.post("/evaluate")
-async def evaluate(
-    file_with_preds: UploadFile = File(...),
-    validation_file: UploadFile = File(...)
-):
-    preds_content = await file_with_preds.read()
-    val_content = await validation_file.read()
+    # Определяем текстовую колонку
+    text_col = None
+    for col in df.columns:
+        if col.lower() in TEXT_COLUMNS:
+            text_col = col
+            break
 
-    preds_df = pd.read_csv(StringIO(preds_content.decode("utf-8")))
-    val_df = pd.read_csv(StringIO(val_content.decode("utf-8")))
+    if text_col is None:
+        return {
+            "result": [],
+            "error": "Не найдена текстовая колонка. Ожидается одна из: text, comment, review, message, content"
+        }
 
-    score = f1_score(val_df["label"], preds_df["pred"], average="macro")
+    # Применяем модель
+    try:
+        df["label"] = df[text_col].apply(lambda x: predict_sentiment(str(x))["label"])
+    except Exception as e:
+        return {"result": [], "error": f"Ошибка обработки модели: {e}"}
 
-    return {"macro_f1": score}
+    return {"result": df.to_dict(orient="records"), "text_col": text_col}

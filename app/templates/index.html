@@ -2,40 +2,46 @@
 <html lang="ru">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Sentiment Analyzer UI</title>
-
-    <!-- Tailwind -->
+    <title>Sentiment Analyzer</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 
 <body class="bg-gray-100">
 
-<div class="max-w-xl mx-auto mt-16 p-8 bg-white rounded-2xl shadow-lg">
+<div class="max-w-2xl mx-auto mt-16 p-8 bg-white rounded-2xl shadow-lg">
     <h1 class="text-2xl font-bold text-gray-800 mb-6 text-center">
         Анализатор Тональности
     </h1>
 
-    <form id="uploadForm" class="space-y-6">
+    <div class="space-y-6">
         <div>
             <label class="block text-gray-700 font-semibold mb-2">
-                Загрузите CSV-файл
+                Выберите CSV-файл
             </label>
-            <input id="fileInput" type="file" 
-                   class="w-full border-2 border-gray-300 p-3 rounded-lg">
+            <input id="fileInput" type="file" accept=".csv"
+                   class="w-full border p-3 rounded-md">
         </div>
 
-        <button type="button"
-                onclick="sendFile()"
-                class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-xl font-semibold">
+        <button onclick="sendFile()"
+                class="w-full bg-blue-600 hover:bg-blue-700 text-white py-3 rounded-lg font-semibold">
             Отправить
         </button>
-    </form>
+    </div>
 
-    <div id="result" class="mt-6 text-gray-700"></div>
+    <div id="result" class="mt-8 text-gray-700"></div>
+
+    <div class="mt-6">
+        <button id="downloadBtn" onclick="downloadCSV()" style="display:none"
+                class="w-full bg-green-600 hover:bg-green-700 text-white py-3 rounded-lg font-semibold">
+            Скачать результат CSV
+        </button>
+    </div>
 </div>
 
 <script>
+let lastResult = null;
+let textColumn = "text";
+
 async function sendFile() {
     const file = document.getElementById("fileInput").files[0];
     if (!file) {
@@ -52,8 +58,75 @@ async function sendFile() {
     });
 
     const data = await res.json();
-    document.getElementById("result").innerText =
-        "Получено строк: " + data.length;
+    console.log("Ответ сервера:", data);
+
+    if (data.error) {
+        document.getElementById("result").innerHTML =
+            `<p class="text-red-600 font-semibold">Ошибка: ${data.error}</p>`;
+        return;
+    }
+
+    lastResult = data.result;
+    textColumn = data.text_col || "text";
+
+    const preview = lastResult.slice(0, 10);
+
+    let html = `
+        <h2 class="text-xl font-semibold mb-4">Первые 10 результатов:</h2>
+        <table class="w-full border">
+            <thead>
+                <tr class="bg-gray-200">
+                    <th class="border px-2 py-1">Текст</th>
+                    <th class="border px-2 py-1">Тональность</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    preview.forEach(row => {
+        const safeText = String(row[textColumn] || "")
+            .replace(/</g, "&lt;")
+            .replace(/>/g, "&gt;");
+
+        html += `
+            <tr>
+                <td class="border px-2 py-1">${safeText}</td>
+                <td class="border px-2 py-1 font-semibold">${row.label}</td>
+            </tr>
+        `;
+    });
+
+    html += `
+            </tbody>
+        </table>
+        <p class="mt-4 font-semibold">Всего строк обработано: ${lastResult.length}</p>
+    `;
+
+    document.getElementById("result").innerHTML = html;
+
+    document.getElementById("downloadBtn").style.display = "block";
+}
+
+function downloadCSV() {
+    if (!lastResult) return;
+
+    const header = Object.keys(lastResult[0]).join(",");
+    const rows = lastResult.map(obj =>
+        Object.values(obj)
+            .map(v => `"${String(v).replace(/"/g, '""')}"`)
+            .join(",")
+    );
+    const csvContent = [header, ...rows].join("\n");
+
+    const blob = new Blob([csvContent], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "sentiment_result.csv";
+    a.click();
+
+    URL.revokeObjectURL(url);
 }
 </script>
 
