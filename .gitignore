@@ -1,3 +1,23 @@
+# Model files - DO NOT COMMIT!
+best_model/
+models/
+*.safetensors
+*.bin
+*.pt
+*.h5
+*.ckpt
+
+# Training scripts
+training.py
+predict.py
+
+# Data files
+*.csv
+*.json
+*.xlsx
+*.tsv
+*.pkl
+
 # Python
 __pycache__/
 *.py[cod]
@@ -19,21 +39,8 @@ venv/
 # VSCode
 .vscode/
 
-# Model weights
-model/*.pt
-model/*.bin
-model/*.safetensors
-*.h5
-*.ckpt
-
-# Data
-data/*.csv
-data/*.xlsx
-data/*.tsv
-
 # Tokenizer caches
 tokenizer/
-*.json
 
 # HuggingFace cache
 .cache/
